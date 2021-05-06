@@ -13,10 +13,11 @@ import const
 
 MARiA_MAJOR_VERSION = 0
 MARiA_MINOR_VERSION = 0
-MARiA_MAJOR_REVISION = 28
+MARiA_MAJOR_REVISION = 29
 MARiA_VERSION = "v{}.{}.{}".format(MARiA_MAJOR_VERSION, MARiA_MINOR_VERSION, MARiA_MAJOR_REVISION)
 
 Configuration = {"Window_XPos": 0, "Window_YPos": 0, "Width": 800, "Height": 500, "Show_OtherPacket": 1}
+IP_Target = {"IP": "127.0.0.1"}
 dummy_mob = ["unknown.gat",0,0,"No Mob Name",0,0,0]
 dummy_npc = ["unknown.gat",0,0,0,"No NPC Name",0,0]
 dummy_chr = {'Char_id': 0, 'Char_Name': 0, "BaseExp": -1, "JobExp": -1, "Zeny": -1}
@@ -83,6 +84,21 @@ def read_config_db():
 				if len(l) >= 2:
 					if l[0] in Configuration:
 						Configuration[str(l[0])] = int(l[1])
+
+def read_ip_db():
+	path = './IP_Target.txt'
+
+	with open(path) as f:
+		for s_line in f:
+			if s_line[:2] == "//":
+				continue
+			elif s_line[:1] == "\n":
+				continue
+			else:
+				l = s_line.split('\t')
+				if len(l) >= 2:
+					if l[0] in IP_Target:
+						IP_Target[str(l[0])] = str(l[1])
 
 def read_packet_db():
 	path = './PacketLength.txt'
@@ -243,41 +259,42 @@ class MARiA_Frame(wx.Frame):
 		file = wx.Menu()
 		edit = wx.Menu()
 
-		copybinary = file.Append(-1, "バイナリ窓コピー")
-		copyscript = file.Append(-1, "スクリプト窓コピー")
+		copybinary = file.Append(-1, "Copy Binary")
+		#copyscript = file.Append(-1, "Copy Log")
+		savelogfile = file.Append(-1, "Save Log")
+		self.Bind(wx.EVT_MENU, self.OnSaveLogFile, savelogfile)
+
 		file.AppendSeparator()
 		item_1 = wx.MenuItem(file, -1, 'Auriga', kind=wx.ITEM_RADIO)
-		item_2 = wx.MenuItem(file, -1, 'rAthena:ToDo', kind=wx.ITEM_RADIO)
-		item_3 = wx.MenuItem(file, -1, 'Hercules:ToDo', kind=wx.ITEM_RADIO)
-		self.scripttimer = wx.MenuItem(file, -1, 'スクリプトタイマーを表示', kind=wx.ITEM_CHECK)
-		item_5 = wx.MenuItem(file, -1, 'ToDo', kind=wx.ITEM_CHECK)
+		item_2 = wx.MenuItem(file, -1, 'rAthena', kind=wx.ITEM_RADIO)
+		item_3 = wx.MenuItem(file, -1, 'Hercules', kind=wx.ITEM_RADIO)
+		self.scripttimer = wx.MenuItem(file, -1, 'Show Log Timer', kind=wx.ITEM_CHECK)
 		file.Append(item_1)
 		file.Append(item_2)
 		file.Append(item_3)
 		file.AppendSeparator()
 		file.Append(self.scripttimer)
-		file.Append(item_5)
 
-		reloadignore = edit.Append(-1, "IgnorePacket再読み込み")
+		reloadignore = edit.Append(-1, "Reload IgnorePacket")
 		self.Bind(wx.EVT_MENU, self.OnReloadIgnore, reloadignore)
 
-		reloadpacket = edit.Append(-1, "PacketLength再読み込み")
+		reloadpacket = edit.Append(-1, "Reload PacketLength")
 		self.Bind(wx.EVT_MENU, self.OnReloadPacket, reloadpacket)
 
 		edit.AppendSeparator()
 
-		clearcache = edit.Append(-1, "キャッシュクリア")
+		clearcache = edit.Append(-1, "Clear Cache")
 		self.Bind(wx.EVT_MENU, self.OnClearCache, clearcache)
 
-		clearbinary = edit.Append(-1, "バイナリ窓クリア")
+		clearbinary = edit.Append(-1, "Clear Binary")
 		self.Bind(wx.EVT_MENU, self.OnClearBinary, clearbinary)
 
-		clearscript = edit.Append(-1, "スクリプト窓クリア")
+		clearscript = edit.Append(-1, "Clear Log Window")
 		self.Bind(wx.EVT_MENU, self.OnClearScript, clearscript)
 
 		edit.AppendSeparator()
 
-		moblist = edit.Append(-1, "モンスター情報統計")
+		moblist = edit.Append(-1, "Monster Info")
 		self.Bind(wx.EVT_MENU, self.OnMonsterList, moblist)
 
 		menubar.Append(file, '&File')
@@ -290,7 +307,7 @@ class MARiA_Frame(wx.Frame):
 		p1 = wx.Panel(sp, -1)
 
 		hbox1 = wx.BoxSizer(wx.HORIZONTAL)
-		st3 = wx.StaticText(p1, -1, 'Char Port:')
+		st3 = wx.StaticText(p1, -1, '  Char Port : ')
 		hbox1.Add(st3, 0, wx.LEFT | wx.BOTTOM | wx.TOP, 2)
 		self.charport = wx.TextCtrl(
 			p1,
@@ -299,7 +316,7 @@ class MARiA_Frame(wx.Frame):
 		self.charport.WriteText('6121')
 		hbox1.Add(self.charport, 1, wx.EXPAND)
 
-		st1 = wx.StaticText(p1, -1, 'Map Port:')
+		st1 = wx.StaticText(p1, -1, '  Map Port : ')
 		hbox1.Add(st1, 0, wx.LEFT | wx.BOTTOM | wx.TOP, 2)
 		self.mapport = wx.TextCtrl(
 			p1,
@@ -308,7 +325,7 @@ class MARiA_Frame(wx.Frame):
 		self.mapport.WriteText('5121')
 		hbox1.Add(self.mapport, 1, wx.EXPAND)
 
-		st2 = wx.StaticText(p1, -1, 'Active Start:')
+		st2 = wx.StaticText(p1, -1, '  Action : ')
 		hbox1.Add(st2, 1, wx.RIGHT | wx.BOTTOM | wx.TOP, 2)
 		self.button = wx.Button(
 			p1,
@@ -344,11 +361,9 @@ class MARiA_Frame(wx.Frame):
 
 		self.text.AppendText("setup...\n")
 
-		host = socket.gethostname()
 		global TargetIP
-		TargetIP = socket.gethostbyname(host)
-
-		self.text.AppendText("MARiA is Activeted, Target IP: " +TargetIP+ "\n")
+		TargetIP = socket.gethostbyname(IP_Target["IP"])
+		self.text.AppendText("Target IP : " + TargetIP + "\n")
 
 		p1.SetSizer(vbox)
 		p2.SetSizer(vbox2)
@@ -359,6 +374,7 @@ class MARiA_Frame(wx.Frame):
 			self.th.start()
 			self.Started = True
 		if self.th.readpause() == True:
+			self.text.AppendText("MARiA : Started...\n")
 			self.th.setport(int(self.charport.GetValue()), int(self.mapport.GetValue()))
 			self.th.c_pause(False)
 			self.timer.Start(MARiA_Frame.Speed)
@@ -403,6 +419,13 @@ class MARiA_Frame(wx.Frame):
 		Configuration["Height"] = size[1]
 		save_configuration()
 		event.Skip()
+
+	def OnSaveLogFile(self, event):
+		text = self.text.GetValue()
+		file = open(("log.txt"), "w")
+		file.write(text)
+		file.close()
+		wx.MessageBox('Log file has been save to "Log.txt"', 'Save Log File', wx.OK | wx.ICON_INFORMATION)
 
 	def OnReloadPacket(self, event):
 		global Packetlen
@@ -1668,5 +1691,6 @@ app = wx.App()
 read_packet_db()
 read_ignore_db()
 read_config_db()
+read_ip_db()
 MARiA_Frame(None, -1, "MARiA  "+MARiA_VERSION)
 app.MainLoop()

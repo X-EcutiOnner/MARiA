@@ -1,0 +1,11 @@
+cx-Freeze==6.6
+cx-Logging==3.0
+idna==3.1
+importlib-metadata==4.0.1
+numpy==1.20.2
+Pillow==8.2.0
+pygame==2.0.1
+scapy==2.4.5
+six==1.15.0
+wxPython==4.1.1
+zipp==3.4.1
