@@ -162,6 +162,7 @@ class MARiA_Catch(threading.Thread):
 		self.charport = 6121
 		self.mapport = 5121
 		self.pause_flag = True
+		self.stop_flag = False  # 終了フラグを追加
 
 	def setport(self, num1, num2):
 		self.charport = num1
@@ -169,7 +170,16 @@ class MARiA_Catch(threading.Thread):
 
 	def run(self):
 		conf.layers.filter ([IP, TCP])
-		sniff (filter = "ip host "+TargetIP, prn=self.OnCatch, count=0)
+		sniff (filter = "ip host "+TargetIP, prn=self.OnCatch, count=0, stop_filter=self.should_stop)
+
+	def should_stop(self, packet):
+		"""スレッド終了判定関数"""
+		return self.stop_flag
+
+	def stop_thread(self):
+		"""スレッドを安全に終了させる"""
+		self.stop_flag = True
+		self.pause_flag = True
 
 	def readpause(self):
 		return self.pause_flag
@@ -352,6 +362,9 @@ class MARiA_Frame(wx.Frame):
 			style=wx.TE_MULTILINE | wx.TE_RICH2 | wx.HSCROLL)
 		vbox.Add(self.btext, 1, wx.EXPAND)
 
+		# 右クリックメニュー追加
+		self.btext.Bind(wx.EVT_CONTEXT_MENU, self.OnBtextContextMenu)
+
 		vbox2 = wx.BoxSizer(wx.VERTICAL)
 		p2 = wx.Panel(sp, style=wx.SUNKEN_BORDER)
 		self.text = wx.TextCtrl(
@@ -390,10 +403,16 @@ class MARiA_Frame(wx.Frame):
 		self.Show(True)
 
 	def OnStart(self, event):
-		if self.Started == False:
+		if self.Started == False or not self.th.is_alive():
+			# 新しいスレッドを生成
+			self.th = MARiA_Catch()
+			self.th.setDaemon(True)
+			self.th.setport(int(self.charport.GetValue()), int(self.mapport.GetValue()))
 			self.th.start()
 			self.Started = True
+		
 		if self.th.readpause() == True:
+			# スレッドが一時停止中の場合、再開
 			self.th.setport(int(self.charport.GetValue()), int(self.mapport.GetValue()))
 			self.th.c_pause(False)
 			self.timer.Start(MARiA_Frame.Speed)
@@ -402,12 +421,25 @@ class MARiA_Frame(wx.Frame):
 			self.mapport.Disable()
 			self.addless.Disable()
 		else:
+			# スレッドが実行中の場合は停止
 			self.th.c_pause(True)
 			self.timer.Stop()
 			self.button.SetLabel("Start")
 			self.charport.Enable()
 			self.mapport.Enable()
 			self.addless.Enable()
+			import time
+			time.sleep(0.1)
+			if self.th.readpause() == True:
+				self.text.AppendText("スレッドが正常に停止しました。\n")
+			else:
+				self.text.AppendText("スレッドを強制終了しています...\n")
+				self.th.stop_thread()
+				time.sleep(0.5)
+				if self.th.is_alive():
+					self.text.AppendText("警告: スレッドがまだ実行中です。\n")
+				else:
+					self.text.AppendText("スレッドが正常に終了しました。\n")
 
 	def OnTimer(self, event):
 		if event.GetId() == MARiA_Frame.ID_TIMER:
@@ -428,6 +460,18 @@ class MARiA_Frame(wx.Frame):
 			event.Skip()
 
 	def OnClose(self, event):
+		# スレッドが実行中の場合は停止
+		if self.Started and self.th.is_alive():
+			self.text.AppendText("アプリケーション終了中: スレッドを停止しています...\n")
+			self.th.stop_thread()
+			import time
+			time.sleep(0.5)
+			
+			# スレッドがまだ生きている場合は強制終了を試行
+			if self.th.is_alive():
+				self.text.AppendText("警告: スレッドの強制終了を試行しています...\n")
+				# デーモンスレッドなので、アプリケーション終了時に自動的に終了します
+		
 		pos = self.GetScreenPosition()
 		size = self.GetSize()
 		Configuration["Window_XPos"] = pos[0]
@@ -2164,7 +2208,7 @@ class MARiA_Frame(wx.Frame):
 					self.text.AppendText("@effect_enter {},{},{},{},0,{};\t// self\n".format(getefst(type),val1,val2,val3,tick))
 				elif p in mobdata.keys():
 					if aid in mobdata[p].keys():
-						self.text.AppendText("@effect_enter {},{},{},{},0,{},{};\t// {}\n".format(getefst(type),val1,val2,val3,tick,flag,aid))
+						self.text.AppendText("@effect_enter {},{},{},{},0,{};\t// {}\n".format(getefst(type),val1,val2,val3,tick,aid))
 		elif num == 0x984:	#seteffect_enter
 			aid		= RFIFOL(fd,2)
 			type	= RFIFOW(fd,6)
